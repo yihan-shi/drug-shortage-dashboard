@@ -1,0 +1,89 @@
+version: 2
+
+sources:
+  - name: drug_shortages
+    description: Drug shortage data from OpenFDA API
+    tables:
+      - name: drug_shortages_staging
+        description: Staging table for new drug shortage data from API
+        columns:
+          - name: id
+            description: Unique identifier for the drug shortage
+            tests:
+              - not_null
+          - name: generic_name
+            description: Generic name of the drug
+          - name: company_name
+            description: Name of the company/manufacturer
+          - name: presentation
+            description: Drug presentation/formulation
+          - name: update_type
+            description: Type of update to the record
+          - name: update_date
+            description: Date when record was last updated
+          - name: availability
+            description: Availability status information
+          - name: related_info
+            description: Related information about the shortage
+          - name: resolved_note
+            description: Notes about resolution (if resolved)
+          - name: reason_for_shortage
+            description: Reason for the drug shortage
+          - name: therapeutic_category
+            description: Therapeutic category of the drug
+          - name: status
+            description: Current status of the shortage
+          - name: change_date
+            description: Date when status changed
+          - name: date_discontinued
+            description: Date when drug was discontinued (if applicable)
+          - name: availability_status
+            description: Detailed availability status
+          - name: ndc
+            description: National Drug Code
+          - name: created_at
+            description: Timestamp when record was inserted
+
+      - name: drug_shortages_historical_classified
+        description: Historical drug shortage data (pre-existing)
+        columns:
+          - name: id
+            description: Unique identifier for the drug shortage
+            tests:
+              - not_null
+
+      - name: drug_shortages_combined
+        description: Combined view of historical and staging data
+        columns:
+          - name: shortage_id
+            description: Unique identifier for the drug shortage
+            tests:
+              - not_null
+          - name: product_description
+            description: Description of the drug product in shortage
+          - name: shortage_status
+            description: Current status of the shortage (e.g., "Currently in Shortage")
+          - name: shortage_designation
+            description: Designation of shortage (e.g., "Professional")
+          - name: shortage_description
+            description: Detailed description of the shortage
+          - name: shortage_reason
+            description: Reason for the shortage
+          - name: manufacturer
+            description: List of manufacturers for the product
+          - name: estimated_resupply_date
+            description: Estimated date when supply will be restored
+          - name: actual_resupply_date
+            description: Actual date when supply was restored
+          - name: discontinuation_description
+            description: Description if product is discontinued
+          - name: revision_date
+            description: Date when the record was last revised
+          - name: report_date
+            description: Date when shortage was first reported
+          - name: update_date
+            description: Date when record was last updated
+          - name: created_at
+            description: Timestamp when record was inserted into staging
+          - name: raw_data
+            description: Complete raw JSON data from API
