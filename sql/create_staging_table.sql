@@ -1,5 +1,3 @@
--- DROP VIEW IF EXISTS drug_shortages_combined;
-
 -- Create the staging table for drug shortage data
 CREATE TABLE IF NOT EXISTS drug_shortages_staging (
     id INTEGER PRIMARY KEY,
@@ -93,6 +91,6 @@ SELECT
     update_date, availability, related_info, resolved_note, 
     reason_for_shortage, therapeutic_category, status, 
     status_change_date, change_date, date_discontinued, 
-    availability_status, ndc, data_source, row_num
+    availability_status, ndc
 FROM deduplicated
 WHERE row_num = 1;

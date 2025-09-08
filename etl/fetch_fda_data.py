@@ -23,6 +23,70 @@ class OpenFDAETL:
             format='%(asctime)s - %(levelname)s - %(message)s'
         )
         self.logger = logging.getLogger(__name__)
+        
+        # Load availability classification mapping
+        self.availability_mapping = self.load_availability_mapping()
+
+    def load_availability_mapping(self) -> Dict[str, str]:
+        """Load the availability classification mapping from CSV"""
+        try:
+            mapping_file = 'data/shortage_2019_2024_unique_available_classification.csv'
+            df = pd.read_csv(mapping_file)
+            
+            # Create mapping dictionary from availability text to status
+            mapping = {}
+            for _, row in df.iterrows():
+                availability_text = row['Availability Information']
+                status = row['Availability Status']
+                if pd.notna(availability_text):
+                    mapping[availability_text.strip()] = status
+            
+            self.logger.info(f"Loaded {len(mapping)} availability classifications from CSV")
+            return mapping
+            
+        except Exception as e:
+            self.logger.warning(f"Could not load availability mapping: {e}")
+            return {}
+
+    def classify_availability_status(self, availability_text: str) -> str:
+        """
+        Classify availability text using CSV mapping with keyword fallback
+        """
+        if not availability_text:
+            return 'unclear'
+        
+        availability_clean = availability_text.strip()
+        
+        if availability_clean in self.availability_mapping:
+            return self.availability_mapping[availability_clean]
+        
+        availability_lower = availability_clean.lower()
+        
+        # Not available patterns (most specific first)
+        if any(pattern in availability_lower for pattern in [
+            'not available', 'unavailable', 'out of stock', 'discontinued',
+            'shortage', 'backorder', 'back order', 'supply disruption', 
+            'manufacturing delay', 'resupply tbd', 'expected release',
+            'next delivery', 'estimated availability'
+        ]):
+            return 'not available'
+        
+        # Limited availability patterns
+        elif any(pattern in availability_lower for pattern in [
+            'limited', 'intermittent', 'restricted', 'allocated', 'allocation',
+            'allocating', 'temporary shortage', 'reduced supply', 'under allocation'
+        ]):
+            return 'limited availability'
+        
+        # Available patterns
+        elif any(pattern in availability_lower for pattern in [
+            'available', 'in stock', 'supply available', 'shipping', 'product available'
+        ]):
+            return 'available'
+        
+        # Default to unclear for unmatched text
+        else:
+            return 'unclear'
 
     def get_date_range(self, days_back: int = 7) -> tuple[str, str]:
         end_date = datetime.now()
@@ -117,7 +181,7 @@ class OpenFDAETL:
                 'status': record.get('status'),
                 'change_date': record.get('change_date'),
                 'date_discontinued': record.get('date_discontinued'),
-                'availability_status': None, # to be filled later
+                'availability_status': self.classify_availability_status(record.get('availability', '')),
                 'ndc': record.get('package_ndc')
             }
             transformed_records.append(transformed_record)
@@ -165,11 +229,27 @@ class OpenFDAETL:
         except Exception as e:
             self.logger.warning(f"Could not auto-create schema: {e}")
 
-    def run_weekly_etl(self):
+    def reset_staging_table(self):
+        """Clear all records from staging table for testing"""
+        try:
+            result = self.supabase.table('drug_shortages_staging').delete().neq('id', 0).execute()
+            self.logger.info("Staging table reset successfully")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error resetting staging table: {e}")
+            return False
+
+    def run_weekly_etl(self, reset_staging=False):
         # Ensure schema exists
         self.ensure_schema_exists()
         
-        start_date, end_date = self.get_date_range(days_back=30)
+        # Reset staging table if requested (for testing)
+        if reset_staging:
+            if not self.reset_staging_table():
+                self.logger.error("Failed to reset staging table")
+                return False
+        
+        start_date, end_date = self.get_date_range(days_back=15)
         
         raw_data = self.fetch_shortage_data(start_date, end_date)
         
@@ -192,7 +272,10 @@ class OpenFDAETL:
 
 def main():
     etl = OpenFDAETL()
-    success = etl.run_weekly_etl()
+    
+    # For testing, you can reset staging table by uncommenting the line below:
+    success = etl.run_weekly_etl(reset_staging=True)
+    # success = etl.run_weekly_etl()
     
     if success:
         print("Weekly ETL completed successfully")
