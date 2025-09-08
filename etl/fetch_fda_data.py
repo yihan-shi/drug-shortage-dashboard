@@ -2,7 +2,7 @@ import requests
 import json
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Union
 import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -61,19 +61,19 @@ class OpenFDAETL:
             self.logger.error(f"Error parsing JSON response: {e}")
             return None
 
-    def get_existing_ids(self) -> Set[str]:
+    def get_existing_ids(self) -> Set[int]:
         """Fetch existing IDs from the staging table to avoid duplicates"""
         try:
             result = self.supabase.table('drug_shortages_staging').select('id').execute()
-            existing_ids = {row['id'] for row in result.data} if result.data else set()
+            existing_ids = {int(row['id']) for row in result.data if row['id'] is not None} if result.data else set()
             self.logger.info(f"Found {len(existing_ids)} existing records in database")
             return existing_ids
         except Exception as e:
             self.logger.warning(f"Could not fetch existing IDs: {e}")
             return set()
 
-    def generate_unique_id(self, record: Dict, existing_ids: Set[str]) -> str:
-        """Generate a unique ID based on record content"""
+    def generate_unique_id(self, record: Dict, existing_ids: Set[int]) -> int:
+        """Generate a unique integer ID based on record content"""
         # Create a hash from key fields that make a record unique
         key_fields = [
             str(record.get('generic_name', '')),
@@ -83,16 +83,15 @@ class OpenFDAETL:
             str(record.get('package_ndc', ''))
         ]
         
-        # Create base hash
+        # Create base hash and convert to integer
         content = '|'.join(key_fields)
-        base_hash = hashlib.md5(content.encode()).hexdigest()[:12]
+        hash_obj = hashlib.md5(content.encode())
+        base_id = int(hash_obj.hexdigest()[:8], 16)  # Use first 8 hex chars as int
         
-        # Ensure uniqueness by adding counter if needed
-        unique_id = base_hash
-        counter = 1
+        # Ensure uniqueness by incrementing if needed
+        unique_id = base_id
         while unique_id in existing_ids:
-            unique_id = f"{base_hash}_{counter:03d}"
-            counter += 1
+            unique_id += 1
             
         existing_ids.add(unique_id)
         return unique_id
@@ -146,8 +145,31 @@ class OpenFDAETL:
             self.logger.error(f"Error loading data to staging table: {e}")
             return False
 
+    def ensure_schema_exists(self):
+        """Ensure the required views and indexes exist"""
+        try:
+            # Check if combined view exists, create if not
+            check_view_sql = """
+            SELECT COUNT(*) as view_count 
+            FROM information_schema.views 
+            WHERE table_name = 'drug_shortages_combined'
+            """
+            result = self.supabase.rpc('exec_sql', {'sql': check_view_sql}).execute()
+            
+            if result.data[0]['view_count'] == 0:
+                self.logger.info("Creating drug_shortages_combined view...")
+                with open('sql/create_staging_table.sql', 'r') as f:
+                    sql_content = f.read()
+                self.supabase.rpc('exec_sql', {'sql': sql_content}).execute()
+                self.logger.info("Schema setup completed")
+        except Exception as e:
+            self.logger.warning(f"Could not auto-create schema: {e}")
+
     def run_weekly_etl(self):
-        start_date, end_date = self.get_date_range(days_back=7)
+        # Ensure schema exists
+        self.ensure_schema_exists()
+        
+        start_date, end_date = self.get_date_range(days_back=30)
         
         raw_data = self.fetch_shortage_data(start_date, end_date)
         
