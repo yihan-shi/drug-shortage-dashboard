@@ -38,7 +38,7 @@ sources:
           - name: date_discontinued
             description: Date when drug was discontinued (if applicable)
           - name: availability_status
-            description: Detailed availability status
+            description: Classified availability status (available, not available, limited availability, unclear)
           - name: ndc
             description: National Drug Code
           - name: created_at

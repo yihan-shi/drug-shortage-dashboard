@@ -2,7 +2,7 @@ import requests
 import json
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import List, Dict, Optional, Set
+from typing import List, Dict, Optional, Set, Union
 import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -27,6 +27,70 @@ class OpenFDAETL:
             format='%(asctime)s - %(levelname)s - %(message)s'
         )
         self.logger = logging.getLogger(__name__)
+        
+        # Load availability classification mapping
+        self.availability_mapping = self.load_availability_mapping()
+
+    def load_availability_mapping(self) -> Dict[str, str]:
+        """Load the availability classification mapping from CSV"""
+        try:
+            mapping_file = 'data/shortage_2019_2024_unique_available_classification.csv'
+            df = pd.read_csv(mapping_file)
+            
+            # Create mapping dictionary from availability text to status
+            mapping = {}
+            for _, row in df.iterrows():
+                availability_text = row['Availability Information']
+                status = row['Availability Status']
+                if pd.notna(availability_text):
+                    mapping[availability_text.strip()] = status
+            
+            self.logger.info(f"Loaded {len(mapping)} availability classifications from CSV")
+            return mapping
+            
+        except Exception as e:
+            self.logger.warning(f"Could not load availability mapping: {e}")
+            return {}
+
+    def classify_availability_status(self, availability_text: str) -> str:
+        """
+        Classify availability text using CSV mapping with keyword fallback
+        """
+        if not availability_text:
+            return 'unclear'
+        
+        availability_clean = availability_text.strip()
+        
+        if availability_clean in self.availability_mapping:
+            return self.availability_mapping[availability_clean]
+        
+        availability_lower = availability_clean.lower()
+        
+        # Not available patterns (most specific first)
+        if any(pattern in availability_lower for pattern in [
+            'not available', 'unavailable', 'out of stock', 'discontinued',
+            'shortage', 'backorder', 'back order', 'supply disruption', 
+            'manufacturing delay', 'resupply tbd', 'expected release',
+            'next delivery', 'estimated availability'
+        ]):
+            return 'not available'
+        
+        # Limited availability patterns
+        elif any(pattern in availability_lower for pattern in [
+            'limited', 'intermittent', 'restricted', 'allocated', 'allocation',
+            'allocating', 'temporary shortage', 'reduced supply', 'under allocation'
+        ]):
+            return 'limited availability'
+        
+        # Available patterns
+        elif any(pattern in availability_lower for pattern in [
+            'available', 'in stock', 'supply available', 'shipping', 'product available'
+        ]):
+            return 'available'
+        
+        # Default to unclear for unmatched text
+        else:
+            return 'unclear'
 
     def get_date_range(self, days_back: int = 15) -> tuple[str, str]:
         end_date = datetime.now()
@@ -67,19 +131,19 @@ class OpenFDAETL:
             self.logger.error(f"Error parsing JSON response: {e}")
             return None
 
-    def get_existing_ids(self) -> Set[str]:
+    def get_existing_ids(self) -> Set[int]:
         """Fetch existing IDs from the staging table to avoid duplicates"""
         try:
             result = self.supabase.table('drug_shortages_staging').select('id').execute()
-            existing_ids = {row['id'] for row in result.data} if result.data else set()
+            existing_ids = {int(row['id']) for row in result.data if row['id'] is not None} if result.data else set()
             self.logger.info(f"Found {len(existing_ids)} existing records in database")
             return existing_ids
         except Exception as e:
             self.logger.warning(f"Could not fetch existing IDs: {e}")
             return set()
 
-    def generate_unique_id(self, record: Dict, existing_ids: Set[str]) -> str:
-        """Generate a unique ID based on record content"""
+    def generate_unique_id(self, record: Dict, existing_ids: Set[int]) -> int:
+        """Generate a unique integer ID based on record content"""
         # Create a hash from key fields that make a record unique
         key_fields = [
             str(record.get('generic_name', '')),
@@ -89,16 +153,15 @@ class OpenFDAETL:
             str(record.get('package_ndc', ''))
         ]
         
-        # Create base hash
+        # Create base hash and convert to integer
         content = '|'.join(key_fields)
-        base_hash = hashlib.md5(content.encode()).hexdigest()[:12]
+        hash_obj = hashlib.md5(content.encode())
+        base_id = int(hash_obj.hexdigest()[:8], 16)  # Use first 8 hex chars as int
         
-        # Ensure uniqueness by adding counter if needed
-        unique_id = base_hash
-        counter = 1
+        # Ensure uniqueness by incrementing if needed
+        unique_id = base_id
         while unique_id in existing_ids:
-            unique_id = f"{base_hash}_{counter:03d}"
-            counter += 1
+            unique_id += 1
             
         existing_ids.add(unique_id)
         return unique_id
@@ -124,7 +187,7 @@ class OpenFDAETL:
                 'status': record.get('status'),
                 'change_date': record.get('change_date'),
                 'date_discontinued': record.get('date_discontinued'),
-                'availability_status': None, # to be filled later
+                'availability_status': self.classify_availability_status(record.get('availability', '')),
                 'ndc': record.get('package_ndc')
             }
             transformed_records.append(transformed_record)
@@ -152,8 +215,47 @@ class OpenFDAETL:
             self.logger.error(f"Error loading data to staging table: {e}")
             return False
 
-    def run_weekly_etl(self):
-        start_date, end_date = self.get_date_range(days_back=7)
+    def ensure_schema_exists(self):
+        """Ensure the required views and indexes exist"""
+        try:
+            # Check if combined view exists, create if not
+            check_view_sql = """
+            SELECT COUNT(*) as view_count 
+            FROM information_schema.views 
+            WHERE table_name = 'drug_shortages_combined'
+            """
+            result = self.supabase.rpc('exec_sql', {'sql': check_view_sql}).execute()
+            
+            if result.data[0]['view_count'] == 0:
+                self.logger.info("Creating drug_shortages_combined view...")
+                with open('sql/create_staging_table.sql', 'r') as f:
+                    sql_content = f.read()
+                self.supabase.rpc('exec_sql', {'sql': sql_content}).execute()
+                self.logger.info("Schema setup completed")
+        except Exception as e:
+            self.logger.warning(f"Could not auto-create schema: {e}")
+
+    def reset_staging_table(self):
+        """Clear all records from staging table for testing"""
+        try:
+            result = self.supabase.table('drug_shortages_staging').delete().neq('id', 0).execute()
+            self.logger.info("Staging table reset successfully")
+            return True
+        except Exception as e:
+            self.logger.error(f"Error resetting staging table: {e}")
+            return False
+
+    def run_weekly_etl(self, reset_staging=False):
+        # Ensure schema exists
+        self.ensure_schema_exists()
+        
+        # Reset staging table if requested (for testing)
+        if reset_staging:
+            if not self.reset_staging_table():
+                self.logger.error("Failed to reset staging table")
+                return False
+        
+        start_date, end_date = self.get_date_range(days_back=15)
         
         raw_data = self.fetch_shortage_data(start_date, end_date)
         
@@ -176,7 +278,10 @@ class OpenFDAETL:
 
 def main():
     etl = OpenFDAETL()
-    success = etl.run_weekly_etl()
+    
+    # For testing, you can reset staging table by uncommenting the line below:
+    success = etl.run_weekly_etl(reset_staging=True)
+    # success = etl.run_weekly_etl()
     
     if success:
         print("Weekly ETL completed successfully")
