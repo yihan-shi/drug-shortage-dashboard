@@ -13,18 +13,22 @@ load_dotenv()
 
 class OpenFDAETL:
     def __init__(self):
+        # set up connection to PostgreSQL database
         self.supabase_url = os.getenv("SUPABASE_URL")
         self.supabase_key = os.getenv("SUPABASE_ANON_KEY")
         self.supabase: Client = create_client(self.supabase_url, self.supabase_key)
+
+        # OpenFDA API base URL
         self.base_url = "https://api.fda.gov/drug/shortages.json"
         
+        # create logging for debugging
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s'
         )
         self.logger = logging.getLogger(__name__)
 
-    def get_date_range(self, days_back: int = 7) -> tuple[str, str]:
+    def get_date_range(self, days_back: int = 15) -> tuple[str, str]:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days_back)
         
@@ -54,9 +58,11 @@ class OpenFDAETL:
                 self.logger.warning("No results found in API response")
                 return []
                 
+        # handle request exception
         except requests.RequestException as e:
             self.logger.error(f"Error fetching data from OpenFDA API: {e}")
             return None
+        # handle JSON decode error
         except json.JSONDecodeError as e:
             self.logger.error(f"Error parsing JSON response: {e}")
             return None
