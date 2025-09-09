@@ -191,9 +191,20 @@ class OpenFDAETL:
                 'ndc': record.get('package_ndc')
             }
             transformed_records.append(transformed_record)
-        
-        return pd.DataFrame(transformed_records)
 
+            df = pd.DataFrame(transformed_records)
+            # THIS NEEDS TO BE TESTED
+            # # also use related info and status to check availability status
+            # is_unclear = (df['availability_status'] == 'unclear')
+            # is_discontinued_status = df['status'].str.contains('discontinue', case=False)
+            # is_discontinued_related_info = df['related_info'].str.contains('discontinue', case=False)
+
+            # df.loc[
+            #     is_unclear & (is_discontinued_status | is_discontinued_related_info), 'availability_status'
+            # ] = 'discontinued'
+        
+        return df
+    
     def load_to_staging(self, df: pd.DataFrame) -> bool:
         try:
             records = df.to_dict('records')
@@ -237,6 +248,8 @@ class OpenFDAETL:
 
     def reset_staging_table(self):
         """Clear all records from staging table for testing"""
+
+        # TODO: the combined table will become the new "historical" table, and then we reset staging
         try:
             result = self.supabase.table('drug_shortages_staging').delete().neq('id', 0).execute()
             self.logger.info("Staging table reset successfully")
