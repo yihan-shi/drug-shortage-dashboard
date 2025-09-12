@@ -40,8 +40,8 @@ class OpenFDAETL:
             # Create mapping dictionary from availability text to status
             mapping = {}
             for _, row in df.iterrows():
-                availability_text = row['Availability Information']
-                status = row['Availability Status']
+                availability_text = row['availability']
+                status = row['availability_status']
                 if pd.notna(availability_text):
                     mapping[availability_text.strip()] = status
             
@@ -52,23 +52,30 @@ class OpenFDAETL:
             self.logger.warning(f"Could not load availability mapping: {e}")
             return {}
 
-    def classify_availability_status(self, availability_text: str) -> str:
+    def classify_availability_status(self, availability_text: str, related_info: str = '', status: str = '') -> str:
         """
-        Classify availability text using CSV mapping with keyword fallback
+        Classify availability status using CSV mapping and checking availability, related_info, and status fields
         """
-        if not availability_text:
-            return 'unclear'
+        # First try CSV mapping for availability text
+        if availability_text and availability_text.strip():
+            availability_clean = availability_text.strip()
+            if availability_clean in self.availability_mapping:
+                return self.availability_mapping[availability_clean]
         
-        availability_clean = availability_text.strip()
+        # Combine all text fields for comprehensive checking
+        all_text = ' '.join([
+            availability_text or '',
+            related_info or '',
+            status or ''
+        ]).lower()
         
-        if availability_clean in self.availability_mapping:
-            return self.availability_mapping[availability_clean]
+        # Discontinued patterns (highest priority)
+        if any(pattern in all_text for pattern in ['discontinue', 'discontinued']):
+            return 'discontinued'
         
-        availability_lower = availability_clean.lower()
-        
-        # Not available patterns (most specific first)
-        if any(pattern in availability_lower for pattern in [
-            'not available', 'unavailable', 'out of stock', 'discontinued',
+        # Not available patterns
+        if any(pattern in all_text for pattern in [
+            'not available', 'unavailable', 'out of stock',
             'shortage', 'backorder', 'back order', 'supply disruption', 
             'manufacturing delay', 'resupply tbd', 'expected release',
             'next delivery', 'estimated availability'
@@ -76,21 +83,19 @@ class OpenFDAETL:
             return 'not available'
         
         # Limited availability patterns
-        elif any(pattern in availability_lower for pattern in [
+        if any(pattern in all_text for pattern in [
             'limited', 'intermittent', 'restricted', 'allocated', 'allocation',
             'allocating', 'temporary shortage', 'reduced supply', 'under allocation'
         ]):
             return 'limited availability'
         
         # Available patterns
-        elif any(pattern in availability_lower for pattern in [
+        if any(pattern in all_text for pattern in [
             'available', 'in stock', 'supply available', 'shipping', 'product available'
         ]):
             return 'available'
         
-        # Default to unclear for unmatched text
-        else:
-            return 'unclear'
+        return 'unclear'
 
     def get_date_range(self, days_back: int = 15) -> tuple[str, str]:
         end_date = datetime.now()
@@ -187,23 +192,17 @@ class OpenFDAETL:
                 'status': record.get('status'),
                 'change_date': record.get('change_date'),
                 'date_discontinued': record.get('date_discontinued'),
-                'availability_status': self.classify_availability_status(record.get('availability', '')),
-                'ndc': record.get('package_ndc')
+                'availability_status': self.classify_availability_status(
+                    record.get('availability', ''),
+                    record.get('related_info', ''),
+                    record.get('status', '')
+                ),
+                'ndc': record.get('package_ndc'),
+                'created_at': datetime.now().isoformat()
             }
             transformed_records.append(transformed_record)
-
-            df = pd.DataFrame(transformed_records)
-            # THIS NEEDS TO BE TESTED
-            # # also use related info and status to check availability status
-            # is_unclear = (df['availability_status'] == 'unclear')
-            # is_discontinued_status = df['status'].str.contains('discontinue', case=False)
-            # is_discontinued_related_info = df['related_info'].str.contains('discontinue', case=False)
-
-            # df.loc[
-            #     is_unclear & (is_discontinued_status | is_discontinued_related_info), 'availability_status'
-            # ] = 'discontinued'
         
-        return df
+        return pd.DataFrame(transformed_records)
     
     def load_to_staging(self, df: pd.DataFrame) -> bool:
         try:
@@ -246,30 +245,49 @@ class OpenFDAETL:
         except Exception as e:
             self.logger.warning(f"Could not auto-create schema: {e}")
 
-    def reset_staging_table(self):
-        """Clear all records from staging table for testing"""
-
-        # TODO: the combined table will become the new "historical" table, and then we reset staging
+    def promote_staging_to_historical(self):
+        """Move staging data to historical table and clear staging"""
         try:
-            result = self.supabase.table('drug_shortages_staging').delete().neq('id', 0).execute()
-            self.logger.info("Staging table reset successfully")
+            # Get all staging data
+            staging_result = self.supabase.table('drug_shortages_staging').select('*').execute()
+            
+            if not staging_result.data:
+                self.logger.info("No staging data to promote")
+                return True
+            
+            # Insert into historical table
+            historical_result = self.supabase.table('drug_shortages_historical_classified').upsert(
+                staging_result.data, 
+                on_conflict='id'
+            ).execute()
+            
+            promoted_count = len(staging_result.data)
+            self.logger.info(f"Promoted {promoted_count} records to historical table")
+            
+            # Clear staging table
+            self.supabase.table('drug_shortages_staging').delete().neq('id', 0).execute()
+            self.logger.info("Staging table cleared successfully")
+            
             return True
+            
         except Exception as e:
-            self.logger.error(f"Error resetting staging table: {e}")
+            self.logger.error(f"Error promoting staging to historical: {e}")
             return False
 
-    def run_weekly_etl(self, reset_staging=False):
+    def run_weekly_etl(self):
+        """Run weekly ETL: promote staging to historical, fetch new data, load to staging"""
+        self.logger.info("Starting weekly ETL process")
+        
         # Ensure schema exists
         self.ensure_schema_exists()
+
+        # Always promote existing staging data to historical (this also clears staging)
+        if not self.promote_staging_to_historical():
+            self.logger.error("Failed to promote staging data to historical")
+            return False
         
-        # Reset staging table if requested (for testing)
-        if reset_staging:
-            if not self.reset_staging_table():
-                self.logger.error("Failed to reset staging table")
-                return False
-        
+        # Fetch new data (last 15 days)
         start_date, end_date = self.get_date_range(days_back=15)
-        
         raw_data = self.fetch_shortage_data(start_date, end_date)
         
         if raw_data is None:
@@ -280,26 +298,42 @@ class OpenFDAETL:
             self.logger.info("No new data to process")
             return True
         
+        # Transform and load new data to staging
         df = self.transform_data(raw_data)
         
         if self.load_to_staging(df):
-            self.logger.info("ETL process completed successfully")
+            self.logger.info("Weekly ETL process completed successfully")
             return True
         else:
-            self.logger.error("ETL process failed during loading stage")
+            self.logger.error("Weekly ETL process failed during loading stage")
             return False
 
 def main():
     etl = OpenFDAETL()
     
-    # For testing, you can reset staging table by uncommenting the line below:
-    success = etl.run_weekly_etl(reset_staging=True)
-    # success = etl.run_weekly_etl()
+    # Count records before ETL
+    staging_before = etl.supabase.table('drug_shortages_staging').select('id', count='exact').execute().count or 0
+    historical_before = etl.supabase.table('drug_shortages_historical_classified').select('id', count='exact').execute().count or 0
+    
+    # Run ETL
+    success = etl.run_weekly_etl()
     
     if success:
-        print("Weekly ETL completed successfully")
+        # Count records after ETL
+        staging_after = etl.supabase.table('drug_shortages_staging').select('id', count='exact').execute().count or 0
+        historical_after = etl.supabase.table('drug_shortages_historical_classified').select('id', count='exact').execute().count or 0
+        
+        # Verify promotion worked correctly (upsert handles duplicates)
+        if historical_after >= historical_before:
+            historical_added = historical_after - historical_before
+            print(f"✅ ETL completed: Historical {historical_before}→{historical_after} (+{historical_added}), Staging {staging_before}→{staging_after}")
+            if historical_added < staging_before:
+                print(f"   Note: {staging_before - historical_added} staging records were duplicates")
+        else:
+            print(f"❌ Historical count decreased: {historical_before}→{historical_after}")
+            exit(1)
     else:
-        print("Weekly ETL failed")
+        print("❌ ETL failed")
         exit(1)
 
 if __name__ == "__main__":
