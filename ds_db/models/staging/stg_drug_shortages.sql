@@ -1,7 +1,7 @@
 {{ config(materialized='view') }}
 
 with source_data as (
-    select * from {{ source('drug_shortages', 'drug_shortages_combined') }}
+    select * from {{ ref('drug_shortages_combined') }}
 ),
 
 cleaned as (
@@ -12,7 +12,7 @@ cleaned as (
         presentation,
         update_type,
         case 
-            when update_date = '' then null
+            when update_date::text = '' then null
             else update_date
         end as update_date,
         availability,
@@ -22,17 +22,16 @@ cleaned as (
         therapeutic_category,
         status,
         case 
-            when change_date = '' then null
+            when change_date::text = '' then null
             else change_date
         end as change_date,
         case 
-            when date_discontinued = '' then null
+            when date_discontinued::text = '' then null
             else date_discontinued
         end as date_discontinued,
         availability_status,
         ndc,
-        created_at,
-        data_source
+        created_at
     from source_data
 )
 

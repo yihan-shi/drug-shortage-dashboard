@@ -11,6 +11,7 @@ with base_data as (
     from {{ ref('stg_drug_shortages') }}
     where generic_name is not null
       and update_date is not null
+      and availability_status != 'discontinued'
 ),
 
 episodes as (

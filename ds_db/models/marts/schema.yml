@@ -1,72 +1,38 @@
 version: 2
 
 models:
-  - name: fact_drug_shortages
-    description: Fact table containing all drug shortage records with cleaned and transformed data
+  - name: drug_availability_episodes
+    description: "Drug availability episodes tracking the start, end, and duration of different availability statuses for each drug"
     columns:
-      - name: shortage_id
-        description: Unique identifier for the drug shortage
+      - name: generic_name
+        description: "Generic name of the drug"
         tests:
           - not_null
-          - unique
-      - name: product_description
-        description: Description of the drug product in shortage
-      - name: shortage_status
-        description: Current status of the shortage
-      - name: shortage_status_category
-        description: Categorized shortage status (Active Shortage, Resolved, Discontinued, Other)
-      - name: shortage_designation
-        description: Designation of shortage (e.g., Professional)
-      - name: shortage_reason
-        description: Reason for the shortage
-      - name: manufacturer
-        description: Manufacturer information
-      - name: estimated_resupply_date
-        description: Estimated resupply date (parsed as date)
-      - name: actual_resupply_date
-        description: Actual resupply date (parsed as date)
-      - name: report_date
-        description: Date when shortage was first reported (parsed as date)
-      - name: update_date
-        description: Date when record was last updated (parsed as date)
-      - name: shortage_duration_days
-        description: Duration of shortage in days (calculated)
-      - name: has_manufacturer_info
-        description: Flag indicating if manufacturer information is available
-
-  - name: dim_manufacturers
-    description: Dimension table containing manufacturer information and statistics
-    columns:
-      - name: manufacturer_key
-        description: Surrogate key for manufacturer
+      - name: company_name
+        description: "Name of the pharmaceutical company"
+      - name: presentation
+        description: "Drug presentation/formulation"
+      - name: therapeutic_category
+        description: "Therapeutic category of the drug"
+      - name: availability_status
+        description: "Current availability status (available, not available, limited availability)"
         tests:
           - not_null
-          - unique
-      - name: manufacturer_name
-        description: Name of the manufacturer
-      - name: shortage_count
-        description: Total number of shortages for this manufacturer
-      - name: first_seen
-        description: First time this manufacturer appeared in data
-      - name: last_seen
-        description: Last time this manufacturer appeared in data
-
-  - name: shortage_summary
-    description: Summary statistics for drug shortages by week and month
-    columns:
-      - name: summary_type
-        description: Type of summary (weekly or monthly)
-      - name: period_start
-        description: Start date of the summary period
-      - name: shortage_status_category
-        description: Category of shortage status
-      - name: shortage_count
-        description: Number of shortages in the period
-      - name: unique_manufacturers
-        description: Number of unique manufacturers affected
-      - name: avg_shortage_duration_days
-        description: Average duration of shortages in days
-      - name: with_estimated_resupply
-        description: Number of shortages with estimated resupply dates
-      - name: with_actual_resupply
-        description: Number of shortages with actual resupply dates
+          - accepted_values:
+              values: ['available', 'not available', 'limited availability']
+      - name: episode_start_date
+        description: "Start date of the availability episode"
+        tests:
+          - not_null
+      - name: episode_end_date
+        description: "End date of the availability episode"
+        tests:
+          - not_null
+      - name: episode_duration_days
+        description: "Duration of the episode in days"
+        tests:
+          - not_null
+      - name: drug_display_name
+        description: "Formatted display name for visualizations"
+      - name: status_color
+        description: "Color code for status visualization"
