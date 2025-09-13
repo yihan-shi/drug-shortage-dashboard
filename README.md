@@ -45,8 +45,5 @@ A data pipeline and dashboard for monitoring FDA drug shortages, built with Pyth
 
 If you need to redefine availability_status:
 1. Update classifications in `historical_data_clean.ipynb` to update historical data and reupload
-<<<<<<< HEAD
+
 2. Update `load_availability_mapping()` and `classify_availability_status()` in `fetch_fda_data.py`
-=======
-2. Update `load_availability_mapping()` and `classify_availability_status()` in `fetch_fda_data.py`
->>>>>>> 1e93c704039a61189abf49c37b253b87fdbaf334
