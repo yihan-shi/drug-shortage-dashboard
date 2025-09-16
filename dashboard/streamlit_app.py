@@ -34,22 +34,47 @@ def load_data():
     supabase = init_supabase()
     
     try:
-        # Load from combined view
-        result = supabase.table('drug_shortages_combined').select('*').limit(1000).execute()
-        df = pd.DataFrame(result.data)
+        # Load from drug_availability_episodes dbt model (already transformed)
+        result = supabase.table('drug_availability_episodes').select('*').execute()
+        episodes_df = pd.DataFrame(result.data)
         
-        if not df.empty:
+        if not episodes_df.empty:
             # Convert date columns
-            date_cols = ['update_date', 'change_date', 'date_discontinued']
-            for col in date_cols:
-                if col in df.columns:
-                    df[col] = pd.to_datetime(df[col], errors='coerce')
+            episodes_df['episode_start_date'] = pd.to_datetime(episodes_df['episode_start_date'])
+            episodes_df['episode_end_date'] = pd.to_datetime(episodes_df['episode_end_date'])
             
-            # Create episodes data
-            episodes_df = create_episodes_data(df)
+            # Create rankings from episodes data
+            rankings_df = episodes_df.groupby(['generic_name', 'company_name', 'therapeutic_category']).agg({
+                'episode_duration_days': ['sum', 'count'],
+                'availability_status': lambda x: (x == 'not available').sum()
+            }).reset_index()
             
-            # Create rankings data
-            rankings_df = create_rankings_data(df)
+            # Flatten column names
+            rankings_df.columns = ['generic_name', 'company_name', 'therapeutic_category', 
+                                 'total_days', 'total_episodes', 'not_available_episodes']
+            
+            # 1. Calculate the 'not available' sums and store in a new DataFrame
+            not_available_summary = episodes_df[
+                episodes_df['availability_status'] == 'not available'
+            ].groupby(['generic_name', 'therapeutic_category'])['episode_duration_days'].sum().reset_index()
+
+            # Rename the aggregated column for clarity before merging
+            not_available_summary = not_available_summary.rename(
+                columns={'episode_duration_days': 'not_available_days'}
+            )
+
+            # 2. Merge this summary data back into your main DataFrame
+            rankings_df = rankings_df.merge(
+                not_available_summary,
+                on=['generic_name', 'therapeutic_category'],
+                how='left'  # Use 'left' to keep all rows from rankings_df
+            )
+
+            # 3. Fill any resulting NaN values with 0
+            rankings_df['not_available_days'] = rankings_df['not_available_days'].fillna(0)
+            
+            rankings_df['not_available_pct'] = (rankings_df['not_available_days'] / rankings_df['total_days'] * 100).round(2)
+            rankings_df = rankings_df.sort_values('not_available_days', ascending=False)
             
             return episodes_df, rankings_df
         else:
@@ -58,45 +83,6 @@ def load_data():
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return pd.DataFrame(), pd.DataFrame()
-
-def create_episodes_data(df):
-    """Convert raw data to episodes format"""
-    episodes = []
-    
-    for drug in df['generic_name'].unique():
-        drug_data = df[df['generic_name'] == drug].sort_values('update_date')
-        
-        for i, row in drug_data.iterrows():
-            next_row = drug_data[drug_data['update_date'] > row['update_date']].head(1)
-            
-            if not next_row.empty:
-                end_date = next_row.iloc[0]['update_date']
-            else:
-                end_date = pd.Timestamp.now()
-            
-            episodes.append({
-                'generic_name': row['generic_name'],
-                'company_name': row['company_name'],
-                'therapeutic_category': row['therapeutic_category'],
-                'availability_status': row['availability_status'],
-                'episode_start_date': row['update_date'],
-                'episode_end_date': end_date,
-                'duration_days': (end_date - row['update_date']).days
-            })
-    
-    return pd.DataFrame(episodes)
-
-def create_rankings_data(df):
-    """Create rankings from raw data"""
-    rankings = df.groupby(['generic_name', 'company_name', 'therapeutic_category']).agg({
-        'availability_status': lambda x: (x == 'not available').sum(),
-        'update_date': 'count'
-    }).reset_index()
-    
-    rankings.columns = ['generic_name', 'company_name', 'therapeutic_category', 'not_available_count', 'total_updates']
-    rankings['not_available_pct'] = (rankings['not_available_count'] / rankings['total_updates'] * 100).round(2)
-    
-    return rankings.sort_values('not_available_count', ascending=False)
 
 # Main app
 def main():
@@ -202,8 +188,8 @@ def main():
     
     ranking_metric = st.selectbox(
         "Rank by:",
-        ["not_available_count", "not_available_pct"],
-        format_func=lambda x: "Days Not Available" if x == "not_available_count" else "Percentage Not Available"
+        ["not_available_days", "not_available_pct"],
+        format_func=lambda x: "Days Not Available" if x == "not_available_days" else "Percentage Not Available"
     )
     
     if not rankings_df.empty:

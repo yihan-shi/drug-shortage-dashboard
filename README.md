@@ -25,7 +25,7 @@ A data pipeline and dashboard for monitoring FDA drug shortages, built with Pyth
 
 3. **Transform data with dbt**:
    ```bash
-   cd ds_db && dbt run
+   cd ds_db && uv run --env-file ../.env dbt run
    ```
 
 4. **Launch dashboard**:
