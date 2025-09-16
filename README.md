@@ -33,6 +33,11 @@ A data pipeline and dashboard for monitoring FDA drug shortages, built with Pyth
    streamlit run dashboard/streamlit_app.py
    ```
 
+5. **Play around with it here**:
+   ```
+   https://drug-shortage-dashboard-ys.streamlit.app/
+   ```
+
 ## Data Pipeline
 
 - `historical_data_clean.ipynb` - Historical data cleaning and classification
