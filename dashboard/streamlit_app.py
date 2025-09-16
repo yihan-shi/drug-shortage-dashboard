@@ -153,10 +153,10 @@ def main():
                 y=group_by,
                 color="availability_status",
                 color_discrete_map={
-                    'not available': '#ff4444',
-                    'limited availability': '#ff8800',
-                    'available': '#44ff44',
-                    'discontinued': '#888888'
+                    'not available': '#EF6A00',
+                    'limited availability': "#8BB8E8",
+                    'available': '#003A70',
+                    'discontinued': '#B1B3B3'
                 },
                 title=f"Drug Availability Timeline (Grouped by {group_by.replace('_', ' ').title()})",
                 height=600
