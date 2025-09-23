@@ -52,3 +52,9 @@ If you need to redefine availability_status:
 1. Update classifications in `historical_data_clean.ipynb` to update historical data and reupload
 
 2. Update `load_availability_mapping()` and `classify_availability_status()` in `fetch_fda_data.py`
+
+## Ideas from Marta
+- capture market age (when is this active ingredient first approved)
+- capture formulation 
+- set up warning when the data schema changes (likely will trigger an error anyway)
+- set up alert when there is an abnormal number of shortages (count unique number of APIs in a time frame)
