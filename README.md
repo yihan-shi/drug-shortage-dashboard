@@ -22,6 +22,11 @@ A data pipeline and dashboard for monitoring FDA drug shortages, built with Pyth
    ```bash
    python etl/fetch_fda_data.py
    ```
+   A typicaly workflow:
+   1. Create SQL model file (e.g., drug_shortage_episodes.sql)
+   2. Add it to schema.yml with column descriptions and tests
+   3. Run `dbt build --select drug_shortage_episodes` to create the table and validate it
+   4. The table is now available in your Supabase database for your dashboard to query
 
 3. **Transform data with dbt**:
    ```bash
