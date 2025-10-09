@@ -30,6 +30,7 @@ cleaned as (
             else date_discontinued
         end as date_discontinued,
         availability_status,
+        shortage_status,
         ndc,
         created_at
     from source_data

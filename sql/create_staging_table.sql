@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS drug_shortages_staging (
     change_date DATE,
     date_discontinued DATE,
     availability_status TEXT,
+    shortage_status TEXT,
     ndc TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -46,6 +47,7 @@ WITH all_records AS (
         change_date,
         date_discontinued,
         availability_status,
+        shortage_status,
         ndc,
         created_at,
         'staging' as data_source
@@ -70,6 +72,7 @@ WITH all_records AS (
         change_date,
         date_discontinued,
         availability_status,
+        shortage_status,
         ndc,
         CAST('2025-09-11 10:30:00' AS DATE) as created_at,
         'historical' as data_source
@@ -83,7 +86,7 @@ deduplicated AS (
             update_date, availability, related_info, resolved_note, 
             reason_for_shortage, therapeutic_category, status, 
             status_change_date, change_date, date_discontinued, 
-            availability_status, ndc
+            availability_status, shortage_status, ndc
         ) as row_num
     FROM
         all_records
@@ -94,6 +97,6 @@ SELECT
     update_date, availability, related_info, resolved_note, 
     reason_for_shortage, therapeutic_category, status, 
     status_change_date, change_date, date_discontinued, 
-    availability_status, ndc, created_at
+    availability_status, shortage_status, ndc, created_at
 FROM deduplicated
 WHERE row_num = 1;

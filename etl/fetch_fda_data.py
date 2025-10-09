@@ -51,6 +51,29 @@ class OpenFDAETL:
         except Exception as e:
             self.logger.warning(f"Could not load availability mapping: {e}")
             return {}
+        
+    def classify_shortage_status(self, update_type: str, status: str) -> str:
+            """
+            Classify shortage status using CSV update_type mapping and checking status field
+            For a specific generic name:
+            1. update_type = New and status = Current -> new shortage
+            2. update_type = Revised or Reverified -> continued shortage
+            3. status = Resolved -> end shortage
+            4. status = Discontinued -> discontinued
+            """
+
+            update_type = update_type.strip().lower()
+            status = status.strip().lower()
+
+            if update_type == 'new' and status == 'current':
+                return 'new'
+            elif update_type in ['revised', 'reverified'] and status == 'current':
+                return 'continued'
+            elif status == 'resolved':
+                return 'ended'
+            elif status == 'to be discontinued':
+                return 'discontinued'
+            
 
     def classify_availability_status(self, availability_text: str, related_info: str = '', status: str = '') -> str:
         """
@@ -195,6 +218,10 @@ class OpenFDAETL:
                 'availability_status': self.classify_availability_status(
                     record.get('availability', ''),
                     record.get('related_info', ''),
+                    record.get('status', '')
+                ),
+                'shortage_status': self.classify_shortage_status(
+                    record.get('update_type', ''),
                     record.get('status', '')
                 ),
                 'ndc': record.get('package_ndc'),

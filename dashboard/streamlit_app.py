@@ -34,8 +34,9 @@ def load_data():
     supabase = init_supabase()
     
     try:
-        # Load from drug_availability_episodes dbt model (already transformed)
-        result = supabase.table('drug_availability_episodes').select('*').execute()
+        # Load from drug_shortage_episodes dbt model (already transformed)
+        # result = supabase.table('drug_availability_episodes').select('*').execute()
+        result = supabase.table('drug_shortage_episodes').select('*').execute()
         episodes_df = pd.DataFrame(result.data)
         
         if not episodes_df.empty:
@@ -46,21 +47,28 @@ def load_data():
             # Create rankings from episodes data
             rankings_df = episodes_df.groupby(['generic_name', 'company_name', 'therapeutic_category']).agg({
                 'episode_duration_days': ['sum', 'count'],
-                'availability_status': lambda x: (x == 'not available').sum()
+                # 'availability_status': lambda x: (x == 'not available').sum()
+                'shortage_status': lambda x: (x.isin(['new', 'continued'])).sum()
             }).reset_index()
             
             # Flatten column names
+            # rankings_df.columns = ['generic_name', 'company_name', 'therapeutic_category', 
+            #                      'total_days', 'total_episodes', 'not_available_episodes']
             rankings_df.columns = ['generic_name', 'company_name', 'therapeutic_category', 
-                                 'total_days', 'total_episodes', 'not_available_episodes']
+                        'total_days', 'total_episodes', 'shortage_episodes']
             
             # 1. Calculate the 'not available' sums and store in a new DataFrame
-            not_available_summary = episodes_df[
-                episodes_df['availability_status'] == 'not available'
+            # not_available_summary = episodes_df[
+            #     episodes_df['availability_status'] == 'not available'
+            # ].groupby(['generic_name', 'therapeutic_category'])['episode_duration_days'].sum().reset_index()
+
+            shortage_summary = episodes_df[
+                episodes_df['shortage_status'].isin(['new', 'continued'])
             ].groupby(['generic_name', 'therapeutic_category'])['episode_duration_days'].sum().reset_index()
 
             # Rename the aggregated column for clarity before merging
             not_available_summary = not_available_summary.rename(
-                columns={'episode_duration_days': 'not_available_days'}
+                columns={'episode_duration_days': 'shortage_days'}
             )
 
             # 2. Merge this summary data back into your main DataFrame
@@ -71,10 +79,10 @@ def load_data():
             )
 
             # 3. Fill any resulting NaN values with 0
-            rankings_df['not_available_days'] = rankings_df['not_available_days'].fillna(0)
+            rankings_df['shortage_days'] = rankings_df['shortage_days'].fillna(0)
             
-            rankings_df['not_available_pct'] = (rankings_df['not_available_days'] / rankings_df['total_days'] * 100).round(2)
-            rankings_df = rankings_df.sort_values('not_available_days', ascending=False)
+            rankings_df['shortage_pct'] = (rankings_df['shortage_days'] / rankings_df['total_days'] * 100).round(2)
+            rankings_df = rankings_df.sort_values('shortage_days', ascending=False)
             
             return episodes_df, rankings_df
         else:
@@ -131,7 +139,7 @@ def main():
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.subheader("📅 Availability Timeline")
+        st.subheader("📅 Shortage Timeline")
         
         # Filter data
         filtered_df = episodes_df[
@@ -151,14 +159,14 @@ def main():
                 x_start="episode_start_date",
                 x_end="episode_end_date",
                 y=group_by,
-                color="availability_status",
+                color="shortage_status",
                 color_discrete_map={
-                    'not available': '#EF6A00',
-                    'limited availability': "#8BB8E8",
-                    'available': '#003A70',
-                    'discontinued': '#B1B3B3'
+                    'new': '#ff4444',
+                    'continued': "#ff8800",
+                    'available': '#44ff44',
+                    'discontinued': '#888888'
                 },
-                title=f"Drug Availability Timeline (Grouped by {group_by.replace('_', ' ').title()})",
+                title=f"Drug Shortage Timeline (Grouped by {group_by.replace('_', ' ').title()})",
                 height=600
             )
             
@@ -177,19 +185,19 @@ def main():
         if not filtered_df.empty:
             total_drugs = filtered_df['generic_name'].nunique()
             avg_episodes = filtered_df.groupby('generic_name').size().mean()
-            not_available_pct = (filtered_df['availability_status'] == 'not available').mean() * 100
+            not_available_pct = (filtered_df['shortage_status'].isin(['new', 'continued'])).mean() * 100
             
             st.metric("Drugs Analyzed", total_drugs)
             st.metric("Avg Episodes per Drug", f"{avg_episodes:.1f}")
-            st.metric("% Time Not Available", f"{not_available_pct:.1f}%")
+            st.metric("% Time In Shortage", f"{not_available_pct:.1f}%")
     
     # Rankings section
     st.subheader("🏆 Drug Shortage Rankings")
     
     ranking_metric = st.selectbox(
         "Rank by:",
-        ["not_available_days", "not_available_pct"],
-        format_func=lambda x: "Days Not Available" if x == "not_available_days" else "Percentage Not Available"
+        ["shortage_days", "shortage_pct"],
+        format_func=lambda x: "Days In Shortage" if x == "shortage_days" else "Percentage Not Available"
     )
     
     if not rankings_df.empty:
