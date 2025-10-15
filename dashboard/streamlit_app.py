@@ -18,13 +18,13 @@ def init_supabase():
     try:
         # Try to use Streamlit secrets first (for deployment)
         supabase_url = st.secrets["SUPABASE_URL"]
-        supabase_key = st.secrets["SUPABASE_SERVICE_KEY"]
+        supabase_key = st.secrets["SUPABASE_ANON_KEY"]
     except:
         # Fallback to environment variables (for local development)
         from dotenv import load_dotenv
         load_dotenv()
         supabase_url = os.getenv("SUPABASE_URL")
-        supabase_key = os.getenv("SUPABASE_SERVICE_KEY")
+        supabase_key = os.getenv("SUPABASE_ANON_KEY")
     
     return create_client(supabase_url, supabase_key)
 
@@ -67,13 +67,13 @@ def load_data():
             ].groupby(['generic_name', 'therapeutic_category'])['episode_duration_days'].sum().reset_index()
 
             # Rename the aggregated column for clarity before merging
-            not_available_summary = not_available_summary.rename(
+            shortage_summary = shortage_summary.rename(
                 columns={'episode_duration_days': 'shortage_days'}
             )
 
             # 2. Merge this summary data back into your main DataFrame
             rankings_df = rankings_df.merge(
-                not_available_summary,
+                shortage_summary,
                 on=['generic_name', 'therapeutic_category'],
                 how='left'  # Use 'left' to keep all rows from rankings_df
             )
