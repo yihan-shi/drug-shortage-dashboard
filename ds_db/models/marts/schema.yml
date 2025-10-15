@@ -36,3 +36,39 @@ models:
         description: "Formatted display name for visualizations"
       - name: status_color
         description: "Color code for status visualization"
+
+  - name: drug_shortage_episodes
+    description: "Drug shortage episodes tracking the start, end, and duration of different shortage statuses for each drug"
+    columns:
+      - name: generic_name
+        description: "Generic name of the drug"
+        tests:
+          - not_null
+      - name: company_name
+        description: "Name of the pharmaceutical company"
+      - name: presentation
+        description: "Drug presentation/formulation"
+      - name: therapeutic_category
+        description: "Therapeutic category of the drug"
+      - name: shortage_status
+        description: "Shortage status (new, continued, ended, discontinued)"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['new', 'continued', 'ended', 'discontinued']
+      - name: episode_start_date
+        description: "Start date of the shortage episode"
+        tests:
+          - not_null
+      - name: episode_end_date
+        description: "End date of the shortage episode"
+        tests:
+          - not_null
+      - name: episode_duration_days
+        description: "Duration of the episode in days"
+        tests:
+          - not_null
+      - name: drug_display_name
+        description: "Formatted display name for visualizations (generic name + company name)"
+      - name: status_color
+        description: "Color code for status visualization in charts"
