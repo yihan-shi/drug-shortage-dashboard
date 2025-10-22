@@ -87,7 +87,13 @@ app = dash.Dash(__name__, suppress_callback_exceptions=True)
 
 # Get all drugs for dropdown
 all_drugs = sorted(episodes_df['generic_name'].unique()) if not episodes_df.empty else []
-default_drugs = all_drugs[:10] if len(all_drugs) > 10 else all_drugs
+
+# Default to 10 most recently active drugs
+if not episodes_df.empty:
+    recent_drugs = episodes_df.sort_values('episode_end_date', ascending=False)['generic_name'].unique()[:10]
+    default_drugs = list(recent_drugs)
+else:
+    default_drugs = []
 
 # Get date range
 if not episodes_df.empty:
