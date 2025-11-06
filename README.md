@@ -35,7 +35,7 @@ A data pipeline and dashboard for monitoring FDA drug shortages, built with Pyth
 
 4. **Launch dashboard**:
    ```bash
-   streamlit run dashboard/streamlit_app.py
+   python dashboard/dash_app.py
    ```
 
 5. **Play around with it here**:
