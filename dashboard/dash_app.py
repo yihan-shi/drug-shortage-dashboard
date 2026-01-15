@@ -105,8 +105,8 @@ else:
 # Layout
 app.layout = html.Div(className='container', children=[
     # Header
-    html.H1("Drug Shortage Dashboard"),
-    html.Div("Analyze drug shortage patterns over time", className='subtitle'),
+    # html.H1("Drug Shortage Dashboard"),
+    # html.Div("Analyze drug shortage patterns over time", className='subtitle'),
 
     # Filters
     html.Div(className='filters', children=[
