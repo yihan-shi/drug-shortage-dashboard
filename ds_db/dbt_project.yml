@@ -50,7 +50,6 @@ models:
             status_change_date DATE,
             change_date DATE,
             date_discontinued DATE,
-            availability_status TEXT,
             ndc TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );

@@ -29,7 +29,6 @@ cleaned as (
             when date_discontinued::text = '' then null
             else date_discontinued
         end as date_discontinued,
-        availability_status,
         shortage_status,
         ndc,
         created_at

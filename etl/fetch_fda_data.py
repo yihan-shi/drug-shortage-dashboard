@@ -28,29 +28,6 @@ class OpenFDAETL:
         )
         self.logger = logging.getLogger(__name__)
         
-        # Load availability classification mapping
-        self.availability_mapping = self.load_availability_mapping()
-
-    def load_availability_mapping(self) -> Dict[str, str]:
-        """Load the availability classification mapping from CSV"""
-        try:
-            mapping_file = 'data/shortage_2019_2024_unique_available_classification.csv'
-            df = pd.read_csv(mapping_file)
-            
-            # Create mapping dictionary from availability text to status
-            mapping = {}
-            for _, row in df.iterrows():
-                availability_text = row['availability']
-                status = row['availability_status']
-                if pd.notna(availability_text):
-                    mapping[availability_text.strip()] = status
-            
-            self.logger.info(f"Loaded {len(mapping)} availability classifications from CSV")
-            return mapping
-            
-        except Exception as e:
-            self.logger.warning(f"Could not load availability mapping: {e}")
-            return {}
         
     def classify_shortage_status(self, update_type: str, status: str) -> str:
             """
@@ -74,51 +51,6 @@ class OpenFDAETL:
             elif status == 'to be discontinued':
                 return 'discontinued'
             
-
-    def classify_availability_status(self, availability_text: str, related_info: str = '', status: str = '') -> str:
-        """
-        Classify availability status using CSV mapping and checking availability, related_info, and status fields
-        """
-        # First try CSV mapping for availability text
-        if availability_text and availability_text.strip():
-            availability_clean = availability_text.strip()
-            if availability_clean in self.availability_mapping:
-                return self.availability_mapping[availability_clean]
-        
-        # Combine all text fields for comprehensive checking
-        all_text = ' '.join([
-            availability_text or '',
-            related_info or '',
-            status or ''
-        ]).lower()
-        
-        # Discontinued patterns (highest priority)
-        if any(pattern in all_text for pattern in ['discontinue', 'discontinued']):
-            return 'discontinued'
-        
-        # Not available patterns
-        if any(pattern in all_text for pattern in [
-            'not available', 'unavailable', 'out of stock',
-            'shortage', 'backorder', 'back order', 'supply disruption', 
-            'manufacturing delay', 'resupply tbd', 'expected release',
-            'next delivery', 'estimated availability'
-        ]):
-            return 'not available'
-        
-        # Limited availability patterns
-        if any(pattern in all_text for pattern in [
-            'limited', 'intermittent', 'restricted', 'allocated', 'allocation',
-            'allocating', 'temporary shortage', 'reduced supply', 'under allocation'
-        ]):
-            return 'limited availability'
-        
-        # Available patterns
-        if any(pattern in all_text for pattern in [
-            'available', 'in stock', 'supply available', 'shipping', 'product available'
-        ]):
-            return 'available'
-        
-        return 'unclear'
 
     def get_date_range(self, days_back: int = 15) -> tuple[str, str]:
         end_date = datetime.now()
@@ -215,11 +147,11 @@ class OpenFDAETL:
                 'status': record.get('status'),
                 'change_date': record.get('change_date'),
                 'date_discontinued': record.get('date_discontinued'),
-                'availability_status': self.classify_availability_status(
-                    record.get('availability', ''),
-                    record.get('related_info', ''),
-                    record.get('status', '')
-                ),
+                # 'availability_status': self.classify_availability_status(
+                #     record.get('availability', ''),
+                #     record.get('related_info', ''),
+                #     record.get('status', '')
+                # ),
                 'shortage_status': self.classify_shortage_status(
                     record.get('update_type', ''),
                     record.get('status', '')
@@ -273,30 +205,38 @@ class OpenFDAETL:
             self.logger.warning(f"Could not auto-create schema: {e}")
 
     def promote_staging_to_historical(self):
-        """Move staging data to historical table and clear staging"""
+        # """Move staging data to historical table and clear staging"""
+        # try:
+        #     # Get all staging data
+        #     staging_result = self.supabase.table('drug_shortages_staging').select('*').execute()
+            
+        #     if not staging_result.data:
+        #         self.logger.info("No staging data to promote")
+        #         return True
+            
+        #     # Insert into historical table
+        #     historical_result = self.supabase.table('drug_shortages_historical_classified').upsert(
+        #         staging_result.data, 
+        #         on_conflict='id'
+        #     ).execute()
+            
+        #     promoted_count = len(staging_result.data)
+        #     self.logger.info(f"Promoted {promoted_count} records to historical table")
+            
+        #     # Clear staging table
+        #     self.supabase.table('drug_shortages_staging').delete().neq('id', 0).execute()
+        #     self.logger.info("Staging table cleared successfully")
+            
+        #     return True
+            
+        # except Exception as e:
+        #     self.logger.error(f"Error promoting staging to historical: {e}")
+        #     return False
+
         try:
-            # Get all staging data
-            staging_result = self.supabase.table('drug_shortages_staging').select('*').execute()
-            
-            if not staging_result.data:
-                self.logger.info("No staging data to promote")
-                return True
-            
-            # Insert into historical table
-            historical_result = self.supabase.table('drug_shortages_historical_classified').upsert(
-                staging_result.data, 
-                on_conflict='id'
-            ).execute()
-            
-            promoted_count = len(staging_result.data)
-            self.logger.info(f"Promoted {promoted_count} records to historical table")
-            
-            # Clear staging table
-            self.supabase.table('drug_shortages_staging').delete().neq('id', 0).execute()
-            self.logger.info("Staging table cleared successfully")
-            
+            self.supabase.rpc('promote_staging_to_historical').execute()
+            self.logger.info("Promoted staging data to historical table and cleared staging successfully")
             return True
-            
         except Exception as e:
             self.logger.error(f"Error promoting staging to historical: {e}")
             return False
@@ -306,7 +246,7 @@ class OpenFDAETL:
         self.logger.info("Starting weekly ETL process")
         
         # Ensure schema exists
-        self.ensure_schema_exists()
+        # self.ensure_schema_exists()
 
         # Always promote existing staging data to historical (this also clears staging)
         if not self.promote_staging_to_historical():

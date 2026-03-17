@@ -15,17 +15,15 @@ CREATE TABLE IF NOT EXISTS drug_shortages_staging (
     status_change_date DATE,
     change_date DATE,
     date_discontinued DATE,
-    availability_status TEXT,
+    -- availability_status TEXT,
     shortage_status TEXT,
     ndc TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_status ON drug_shortages_staging(status);
+CREATE INDEX IF NOT EXISTS idx_status ON drug_shortages_staging(shortage_status);
 CREATE INDEX IF NOT EXISTS idx_update_date ON drug_shortages_staging(update_date);
-CREATE INDEX IF NOT EXISTS idx_company_name ON drug_shortages_staging(company_name);
-CREATE INDEX IF NOT EXISTS idx_generic_name ON drug_shortages_staging(generic_name);
 
 -- Create a union view combining historical and staging data with deduplication
 CREATE OR REPLACE VIEW drug_shortages_combined AS
@@ -46,7 +44,6 @@ WITH all_records AS (
         status_change_date,
         change_date,
         date_discontinued,
-        availability_status,
         shortage_status,
         ndc,
         created_at,
@@ -71,7 +68,6 @@ WITH all_records AS (
         status_change_date,
         change_date,
         date_discontinued,
-        availability_status,
         shortage_status,
         ndc,
         CAST('2025-09-11 10:30:00' AS DATE) as created_at,
@@ -86,7 +82,7 @@ deduplicated AS (
             update_date, availability, related_info, resolved_note, 
             reason_for_shortage, therapeutic_category, status, 
             status_change_date, change_date, date_discontinued, 
-            availability_status, shortage_status, ndc
+            shortage_status, ndc
         ) as row_num
     FROM
         all_records
@@ -97,6 +93,6 @@ SELECT
     update_date, availability, related_info, resolved_note, 
     reason_for_shortage, therapeutic_category, status, 
     status_change_date, change_date, date_discontinued, 
-    availability_status, shortage_status, ndc, created_at
+    shortage_status, ndc, created_at
 FROM deduplicated
 WHERE row_num = 1;
