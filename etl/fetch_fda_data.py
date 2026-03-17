@@ -215,7 +215,7 @@ class OpenFDAETL:
         #         return True
             
         #     # Insert into historical table
-        #     historical_result = self.supabase.table('drug_shortages_historical_classified').upsert(
+        #     historical_result = self.supabase.table('drug_shortages_classified_raw').upsert(
         #         staging_result.data, 
         #         on_conflict='id'
         #     ).execute()
@@ -280,7 +280,7 @@ def main():
     
     # Count records before ETL
     staging_before = etl.supabase.table('drug_shortages_staging').select('id', count='exact').execute().count or 0
-    historical_before = etl.supabase.table('drug_shortages_historical_classified').select('id', count='exact').execute().count or 0
+    historical_before = etl.supabase.table('drug_shortages_classified_raw').select('id', count='exact').execute().count or 0
     
     # Run ETL
     success = etl.run_weekly_etl()
@@ -288,7 +288,7 @@ def main():
     if success:
         # Count records after ETL
         staging_after = etl.supabase.table('drug_shortages_staging').select('id', count='exact').execute().count or 0
-        historical_after = etl.supabase.table('drug_shortages_historical_classified').select('id', count='exact').execute().count or 0
+        historical_after = etl.supabase.table('drug_shortages_classified_raw').select('id', count='exact').execute().count or 0
         
         # Verify promotion worked correctly (upsert handles duplicates)
         if historical_after >= historical_before:

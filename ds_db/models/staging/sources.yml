@@ -3,6 +3,7 @@ version: 2
 sources:
   - name: drug_shortages
     description: Drug shortage data from OpenFDA API
+    schema: public
     tables:
       - name: drug_shortages_staging
         description: Staging table for new drug shortage data from API
@@ -42,11 +43,39 @@ sources:
           - name: created_at
             description: Timestamp when record was inserted
 
-      - name: drug_shortages_historical_classified
+      - name: drug_shortages_classified_raw
         description: Historical drug shortage data (pre-existing)
         columns:
           - name: id
             description: Unique identifier for the drug shortage
             tests:
               - not_null
+
+      - name: ndc_fda
+        description: FDA NDC directory with drug product information
+        columns:
+          - name: key
+            description: Primary key identifier
+          - name: AppINo
+            description: Application number
+          - name: DrugName
+            description: Name of the drug product
+          - name: SponsorName_x
+            description: Name of the drug sponsor
+          - name: single_source
+            description: Indicates if drug is single source
+          - name: ActiveIngredient
+            description: Active ingredient in the drug product
+          - name: PROPRIETARYNAME
+            description: Proprietary name of the drug
+          - name: APPLICATIONNUMBER
+            description: Application number (FDA)
+          - name: PRODUCTNDC
+            description: Product NDC code (join key)
+          - name: ROUTENAME
+            description: Route of administration
+          - name: SUBSTANCENAME
+            description: Active substance name
+          - name: LABELERNAME
+            description: Name of the drug labeler
 

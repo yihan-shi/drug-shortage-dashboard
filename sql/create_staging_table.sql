@@ -72,7 +72,7 @@ WITH all_records AS (
         ndc,
         CAST('2025-09-11 10:30:00' AS DATE) as created_at,
         'historical' as data_source
-    FROM drug_shortages_historical_classified
+    FROM drug_shortages_classified_raw
 ),
 deduplicated AS (
     SELECT

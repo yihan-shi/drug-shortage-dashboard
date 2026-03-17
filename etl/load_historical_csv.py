@@ -65,7 +65,7 @@ def load_csv_to_historical(csv_path: str):
     df['update_date'] = df['update_date'].dt.strftime('%Y-%m-%d').where(df['update_date'].notna(), None)
 
     # Fetch existing IDs to detect collisions
-    result = supabase.table('drug_shortages_historical_classified').select('id').execute()
+    result = supabase.table('drug_shortages_classified_raw').select('id').execute()
     existing_ids = {int(row['id']) for row in result.data if row['id'] is not None}
     logger.info(f"Found {len(existing_ids)} existing records in historical table")
 
@@ -115,7 +115,7 @@ def load_csv_to_historical(csv_path: str):
     inserted = 0
     for i in range(0, len(records), batch_size):
         batch = records[i:i + batch_size]
-        supabase.table('drug_shortages_historical_classified').upsert(
+        supabase.table('drug_shortages_classified_raw').upsert(
             batch,
             on_conflict='id',
             ignore_duplicates=True
