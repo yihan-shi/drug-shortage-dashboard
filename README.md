@@ -28,9 +28,11 @@ A data pipeline and dashboard for monitoring FDA drug shortages, built with Pyth
    3. Run `dbt build --select drug_shortage_episodes` to create the table and validate it
    4. The table is now available in your Supabase database for your dashboard to query
 
-3. **Transform data with dbt**:
+3. **Transform data with dbt and check data lineage**:
    ```bash
-   cd ds_db && uv run --env-file ../.env dbt run
+   cd ds_db 
+   dbt run
+   dbt docs serve --host 0.0.0.0 --port 8080
    ```
 
 4. **Launch dashboard**:
@@ -44,19 +46,11 @@ A data pipeline and dashboard for monitoring FDA drug shortages, built with Pyth
    ```
 
 ## Data Pipeline
+Check out dbt lineage graph
+   ```bash
+   dbt docs serve --host 0.0.0.0 --port 8080
+   ```
 
-- `historical_data_clean.ipynb` - Historical data cleaning and classification
-- `etl/fetch_fda_data.py` - Fetches FDA data and classifies availability status
-- `ds_db/models/staging/` - dbt staging models for data cleaning
-- `ds_db/models/marts/` - dbt mart models for analytics (episodes, summaries)
-- `dashboard/streamlit_app.py` - Interactive visualization dashboard
-
-## Updating Availability Classifications
-
-If you need to redefine availability_status:
-1. Update classifications in `historical_data_clean.ipynb` to update historical data and reupload
-
-2. Update `load_availability_mapping()` and `classify_availability_status()` in `fetch_fda_data.py`
 
 ## Ideas from Marta
 - capture market age (when is this active ingredient first approved)
