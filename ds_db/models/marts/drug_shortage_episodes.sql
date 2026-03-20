@@ -1,5 +1,5 @@
 {{ config(materialized='table') }}
-
+-- REDO, the data lineage should be stem from int_shortage_ndc, not stg_drug_shortages.
 with base_data as (
     select
         generic_name,
