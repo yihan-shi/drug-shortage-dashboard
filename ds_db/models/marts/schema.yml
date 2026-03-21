@@ -39,7 +39,7 @@ models:
         description: "Color code for status visualization in charts"
 
   - name: mart_shortage_characteristics
-    description: "Drug shortage characteristics for pie chart visualizations. Each row is a drug_identifier + update_date combination with route_category and single_source attributes."
+    description: "Drug shortage characteristics for pie charts. One row per drug_identifier with route_category, single_source, and date range. Excludes discontinued drugs."
     columns:
       - name: drug_identifier
         description: "Unique drug identifier (substance_name + route_category)"
@@ -49,7 +49,27 @@ models:
         description: "Route of administration category (injectable, oral, topical, etc.)"
       - name: single_source
         description: "Whether the drug is single source"
-      - name: update_date
-        description: "Date of the shortage update record"
+      - name: first_update_date
+        description: "Earliest update date for this drug"
+      - name: last_update_date
+        description: "Latest update date for this drug"
+
+  - name: mart_shortage_survival
+    description: "Kaplan-Meier survival data. One row per drug_identifier shortage episode with duration and resolution status. Excludes discontinued drugs."
+    columns:
+      - name: drug_identifier
+        description: "Unique drug identifier (substance_name + route_category)"
         tests:
           - not_null
+      - name: route_category
+        description: "Route of administration category"
+      - name: single_source
+        description: "Whether the drug is single source"
+      - name: shortage_start_date
+        description: "Date shortage started (first new/continued status)"
+      - name: resolution_date
+        description: "Date shortage resolved (first ended status), null if censored"
+      - name: resolved
+        description: "Whether the shortage was resolved (true) or censored (false)"
+      - name: duration_days
+        description: "Days from shortage start to resolution or current date"

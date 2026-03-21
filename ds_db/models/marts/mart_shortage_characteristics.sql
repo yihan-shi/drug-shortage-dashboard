@@ -17,6 +17,7 @@ drug_summary as (
     from shortage_ndc
     where drug_identifier is not null
       and update_date is not null
+      and (shortage_status is null or shortage_status != 'discontinued')
     group by drug_identifier, route_category, "single_source"
 )
 
