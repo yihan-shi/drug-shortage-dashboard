@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Set, Union
 import os
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 import logging
 import hashlib
 
@@ -16,7 +16,11 @@ class OpenFDAETL:
         # set up connection to PostgreSQL database
         self.supabase_url = os.getenv("SUPABASE_URL")
         self.supabase_key = os.getenv("SUPABASE_ANON_KEY")
-        self.supabase: Client = create_client(self.supabase_url, self.supabase_key)
+        self.supabase: Client = create_client(
+            self.supabase_url,
+            self.supabase_key,
+            options=ClientOptions(postgrest_client_timeout=30)
+        )
 
         # OpenFDA API base URL
         self.base_url = "https://api.fda.gov/drug/shortages.json"

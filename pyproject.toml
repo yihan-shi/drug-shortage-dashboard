@@ -18,4 +18,6 @@ dependencies = [
     "dash>=3.2.0",
     "plotly>=6.3.0",
     "streamlit>=1.49.1",
+    "dotenv>=0.9.9",
+    "httpx>=0.28.1",
 ]

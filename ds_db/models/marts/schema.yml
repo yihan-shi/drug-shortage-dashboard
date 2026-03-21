@@ -37,3 +37,19 @@ models:
         description: "Formatted display name for visualizations (generic name + company name)"
       - name: status_color
         description: "Color code for status visualization in charts"
+
+  - name: mart_shortage_characteristics
+    description: "Drug shortage characteristics for pie chart visualizations. Each row is a drug_identifier + update_date combination with route_category and single_source attributes."
+    columns:
+      - name: drug_identifier
+        description: "Unique drug identifier (substance_name + route_category)"
+        tests:
+          - not_null
+      - name: route_category
+        description: "Route of administration category (injectable, oral, topical, etc.)"
+      - name: single_source
+        description: "Whether the drug is single source"
+      - name: update_date
+        description: "Date of the shortage update record"
+        tests:
+          - not_null
